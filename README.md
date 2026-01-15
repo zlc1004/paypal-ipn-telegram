@@ -11,6 +11,7 @@ A PayPal IPN server integrated with a Telegram bot for payment tracking and noti
 - **Cash Out System**: Cash out balance with configurable fee (default 10%)
 - **Transaction History**: View all received transactions
 - **User Management**: Add/remove users to receive notifications
+- **IPN Forwarding**: Forward IPN data to multiple external URLs
 - **Docker Support**: Easy deployment with Docker Compose
 
 ## Setup
@@ -70,6 +71,13 @@ docker-compose logs -f
 - `/setfee <percentage>` - Set cash out fee (admin only)
 - `/status` - View system status
 
+### IPN Forwarding Commands (Admin Only)
+
+- `/forward <url>` - Add URL to forward IPN data to
+- `/remove-forward <url>` - Remove a forwarding URL
+- `/list-forward` - List all configured forwarding URLs
+- `/forward-menu` - Interactive menu to manage forwarding URLs
+
 ## PayPal IPN Setup
 
 1. Go to PayPal Seller Preferences -> Instant Payment Notifications
@@ -85,3 +93,5 @@ docker-compose logs -f
 - The bot uses exchange rates from `@fawazahmed0/currency-api`
 - All transactions are stored in memory (restart clears data)
 - Users must run `/start` before they can receive notifications
+- IPN forwarding forwards the exact same data to all configured URLs
+- All forward-related commands are admin-only
