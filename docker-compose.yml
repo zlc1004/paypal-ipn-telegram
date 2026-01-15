@@ -1,0 +1,10 @@
+services:
+  paypal-ipn-bot:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - ADMIN_USER_ID=${ADMIN_USER_ID}
+      - PORT=3000
+    restart: unless-stopped
