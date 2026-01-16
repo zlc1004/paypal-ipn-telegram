@@ -121,6 +121,7 @@ app.post('/ipn', async (req, res) => {
   const payerEmail = ipnData.payer_email;
   const transactionId = ipnData.txn_id;
   const paymentDate = ipnData.payment_date;
+  const transactionSubject = ipnData.transaction_subject || ipnData.item_name || 'Payment';
   
   if (paymentStatus === 'Completed' && mcGross > 0) {
     const rates = await getExchangeRates();
@@ -134,6 +135,7 @@ app.post('/ipn', async (req, res) => {
         currency: mcCurrency,
         amountUSD: amountUSD,
         email: payerEmail,
+        subject: transactionSubject,
         timestamp: new Date().toISOString()
       };
       
@@ -145,11 +147,11 @@ app.post('/ipn', async (req, res) => {
       
       for (const user of notificationUsersList) {
         if (registeredUserIds.includes(user.userId)) {
-          bot.sendMessage(user.userId, `🎉 New payment received!\n\nAmount: ${mcGross} ${mcCurrency.toUpperCase()}\nUSD: $${amountUSD.toFixed(2)}\nFrom: ${payerEmail}\nTransaction ID: ${transactionId}`);
+          bot.sendMessage(user.userId, `🎉 New payment received!\n\n📝 ${transactionSubject}\n💵 Amount: ${mcGross} ${mcCurrency.toUpperCase()} ($${amountUSD.toFixed(2)} USD)\n👤 From: ${payerEmail}\n🆔 ID: ${transactionId}`);
         }
       }
       
-      bot.sendMessage(ADMIN_USER_ID, `💰 Payment received:\n\n$${amountUSD.toFixed(2)} USD (${mcGross} ${mcCurrency.toUpperCase()})`);
+      bot.sendMessage(ADMIN_USER_ID, `💰 Payment received:\n\n📝 ${transactionSubject}\n💵 $${amountUSD.toFixed(2)} USD (${mcGross} ${mcCurrency.toUpperCase()})\n👤 From: ${payerEmail}\n🆔 ID: ${transactionId}`);
     }
   }
   
@@ -275,7 +277,8 @@ bot.onText(/\/transactions/, (msg) => {
     
     let message = '📊 Transaction History:\n\n';
     transactions.forEach((t, index) => {
-      message += `${index + 1}. $${t.amount.toFixed(2)} ${t.currency.toUpperCase()} ($${t.amountUSD.toFixed(2)} USD)\n   ${t.date}\n   ID: ${t.id}\n\n`;
+      const subject = t.subject || 'Payment';
+      message += `${index + 1}. 📝 ${subject}\n   💵 $${t.amount.toFixed(2)} ${t.currency.toUpperCase()} ($${t.amountUSD.toFixed(2)} USD)\n   📅 ${t.date}\n   🆔 ${t.id}\n\n`;
     });
     
     bot.sendMessage(chatId, message);
@@ -553,7 +556,8 @@ bot.on('callback_query', async (query) => {
     
     let message = '📊 Transaction History:\n\n';
     transactions.forEach((t, index) => {
-      message += `${index + 1}. $${t.amount.toFixed(2)} ${t.currency.toUpperCase()} ($${t.amountUSD.toFixed(2)} USD)\n   ${t.date}\n   ID: ${t.id}\n\n`;
+      const subject = t.subject || 'Payment';
+      message += `${index + 1}. 📝 ${subject}\n   💵 $${t.amount.toFixed(2)} ${t.currency.toUpperCase()} ($${t.amountUSD.toFixed(2)} USD)\n   📅 ${t.date}\n   🆔 ${t.id}\n\n`;
     });
     
     bot.sendMessage(chatId, message);
