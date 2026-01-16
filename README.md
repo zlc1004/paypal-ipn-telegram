@@ -47,10 +47,15 @@ ADMIN_USER_ID=your_admin_user_id_here
 PORT=3000
 ```
 
-3. Run with Docker Compose:
+3. Run with Docker Compose (includes MongoDB):
 ```bash
 docker-compose up -d
 ```
+
+This will start:
+- The application on port 3000
+- MongoDB (not exposed, using internal Docker DNS)
+- Data persistence in `./mongodata` directory
 
 4. View logs:
 ```bash
@@ -83,15 +88,22 @@ docker-compose logs -f
 1. Go to PayPal Seller Preferences -> Instant Payment Notifications
 2. Set the IPN URL to: `http://your-server:3000/ipn`
 3. Enable IPN messages
+4. For live transactions, use the production IPN URL above
+
+**Important:**
+- All IPNs are verified with PayPal's production endpoint before processing
+- Only verified "VERIFIED" IPNs are processed
+- Invalid or unverified IPNs are logged but not processed
 
 ## API Endpoints
 
-- `POST /ipn` - PayPal IPN endpoint
+- `POST /ipn` - PayPal IPN endpoint (automatically verifies with PayPal)
 
 ## Notes
 
 - The bot uses exchange rates from `@fawazahmed0/currency-api`
-- All transactions are stored in memory (restart clears data)
+- All transactions and settings are stored in MongoDB (data persists across restarts)
+- MongoDB is not exposed externally for security
 - Users must run `/start` before they can receive notifications
 - IPN forwarding forwards the exact same data to all configured URLs
 - All forward-related commands are admin-only

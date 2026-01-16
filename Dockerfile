@@ -9,4 +9,4 @@ COPY server.js ./
 
 EXPOSE 3000
 
-CMD ["node", "server.js", "${BOT_TOKEN}", "${ADMIN_USER_ID}"]
+CMD node server.js ${BOT_TOKEN} ${ADMIN_USER_ID}
