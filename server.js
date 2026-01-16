@@ -116,14 +116,16 @@ app.post('/ipn', async (req, res) => {
   console.log('Processing Verified IPN Data:', JSON.stringify(ipnData, null, 2));
   
   const paymentStatus = ipnData.payment_status;
+  const txnType = ipnData.txn_type;
   const mcGross = parseFloat(ipnData.mc_gross);
   const mcCurrency = ipnData.mc_currency;
   const payerEmail = ipnData.payer_email;
   const transactionId = ipnData.txn_id;
   const paymentDate = ipnData.payment_date;
-  const transactionSubject = ipnData.transaction_subject || ipnData.item_name || 'Payment';
+  const memo = ipnData.memo || 'none';
+  const protectionEligibility = ipnData.protection_eligibility || 'Unknown';
   
-  if (paymentStatus === 'Completed' && mcGross > 0) {
+  if (paymentStatus === 'Completed' && mcGross > 0 && txnType === 'send_money') {
     const rates = await getExchangeRates();
     const amountUSD = convertToUSD(mcGross, mcCurrency, rates);
     
@@ -135,7 +137,8 @@ app.post('/ipn', async (req, res) => {
         currency: mcCurrency,
         amountUSD: amountUSD,
         email: payerEmail,
-        subject: transactionSubject,
+        memo: memo,
+        protection: protectionEligibility,
         timestamp: new Date().toISOString()
       };
       
@@ -147,11 +150,11 @@ app.post('/ipn', async (req, res) => {
       
       for (const user of notificationUsersList) {
         if (registeredUserIds.includes(user.userId)) {
-          bot.sendMessage(user.userId, `🎉 New payment received!\n\n📝 ${transactionSubject}\n💵 Amount: ${mcGross} ${mcCurrency.toUpperCase()} ($${amountUSD.toFixed(2)} USD)\n👤 From: ${payerEmail}\n🆔 ID: ${transactionId}`);
+          bot.sendMessage(user.userId, `💰 Payment received!\n\n💵 ${mcGross} ${mcCurrency.toUpperCase()} ($${amountUSD.toFixed(2)} USD)\n👤 From: ${payerEmail}\n📝 Memo: ${memo}\n🛡️ Protection: ${protectionEligibility}\n🆔 ID: ${transactionId}`);
         }
       }
       
-      bot.sendMessage(ADMIN_USER_ID, `💰 Payment received:\n\n📝 ${transactionSubject}\n💵 $${amountUSD.toFixed(2)} USD (${mcGross} ${mcCurrency.toUpperCase()})\n👤 From: ${payerEmail}\n🆔 ID: ${transactionId}`);
+      bot.sendMessage(ADMIN_USER_ID, `💰 Payment received!\n\n💵 ${mcGross} ${mcCurrency.toUpperCase()} ($${amountUSD.toFixed(2)} USD)\n👤 From: ${payerEmail}\n📝 Memo: ${memo}\n🛡️ Protection: ${protectionEligibility}\n🆔 ID: ${transactionId}`);
     }
   }
   
@@ -277,8 +280,9 @@ bot.onText(/\/transactions/, (msg) => {
     
     let message = '📊 Transaction History:\n\n';
     transactions.forEach((t, index) => {
-      const subject = t.subject || 'Payment';
-      message += `${index + 1}. 📝 ${subject}\n   💵 $${t.amount.toFixed(2)} ${t.currency.toUpperCase()} ($${t.amountUSD.toFixed(2)} USD)\n   📅 ${t.date}\n   🆔 ${t.id}\n\n`;
+      const memo = t.memo || 'none';
+      const protection = t.protection || 'Unknown';
+      message += `${index + 1}. 💵 $${t.amount.toFixed(2)} ${t.currency.toUpperCase()} ($${t.amountUSD.toFixed(2)} USD)\n   📝 Memo: ${memo}\n   🛡️ ${protection}\n   📅 ${t.date}\n   🆔 ${t.id}\n\n`;
     });
     
     bot.sendMessage(chatId, message);
@@ -556,8 +560,9 @@ bot.on('callback_query', async (query) => {
     
     let message = '📊 Transaction History:\n\n';
     transactions.forEach((t, index) => {
-      const subject = t.subject || 'Payment';
-      message += `${index + 1}. 📝 ${subject}\n   💵 $${t.amount.toFixed(2)} ${t.currency.toUpperCase()} ($${t.amountUSD.toFixed(2)} USD)\n   📅 ${t.date}\n   🆔 ${t.id}\n\n`;
+      const memo = t.memo || 'none';
+      const protection = t.protection || 'Unknown';
+      message += `${index + 1}. 💵 $${t.amount.toFixed(2)} ${t.currency.toUpperCase()} ($${t.amountUSD.toFixed(2)} USD)\n   📝 Memo: ${memo}\n   🛡️ ${protection}\n   📅 ${t.date}\n   🆔 ${t.id}\n\n`;
     });
     
     bot.sendMessage(chatId, message);
