@@ -419,118 +419,140 @@ bot.onText(/\/setfee (.+)/, (msg, match) => {
   bot.sendMessage(chatId, `Cash out fee set to ${cashOutFee}%`);
 });
 
-bot.onText(/\/status/, (msg) => {
+bot.onText(/\/status/, async (msg) => {
   const chatId = msg.chat.id;
+  const transactions = await transactionsCollection.find({}).toArray();
+  const registeredUsersCount = await registeredUsersCollection.countDocuments({});
+  const notificationUsersCount = await notificationUsersCollection.countDocuments({});
   const totalUSD = transactions.reduce((sum, t) => sum + t.amountUSD, 0);
-  
+
   let message = `📊 System Status\n\n`;
   message += `Total Transactions: ${transactions.length}\n`;
   message += `Total Received: $${totalUSD.toFixed(2)} USD\n`;
-  message += `Registered Users: ${registeredUsers.size}\n`;
-  message += `Notification Users: ${notificationUsers.size}\n`;
+  message += `Registered Users: ${registeredUsersCount}\n`;
+  message += `Notification Users: ${notificationUsersCount}\n`;
   message += `Cash Out Fee: ${cashOutFee}%\n`;
-  
+
   bot.sendMessage(chatId, message);
 });
 
 bot.onText(/\/forward (.+)/, (msg, match) => {
   const chatId = msg.chat.id;
   const url = match[1].trim();
-  
+
   if (chatId.toString() !== ADMIN_USER_ID) {
     bot.sendMessage(chatId, 'Only admin can add forwarding URLs.');
     return;
   }
-  
+
   try {
     new URL(url);
   } catch (error) {
     bot.sendMessage(chatId, 'Invalid URL. Please provide a valid URL including http:// or https://');
     return;
   }
-  
-  forwardUrls.add(url);
-  bot.sendMessage(chatId, `URL added to forwarding list:\n${url}`);
+
+  forwardUrlsCollection.insertOne({ url: url }).then(() => {
+    bot.sendMessage(chatId, `URL added to forwarding list:\n${url}`);
+  }).catch(err => {
+    console.error('Error adding forward URL:', err);
+    bot.sendMessage(chatId, 'Error adding URL to forwarding list.');
+  });
 });
 
 bot.onText(/\/remove-forward (.+)/, (msg, match) => {
   const chatId = msg.chat.id;
   const url = match[1].trim();
-  
+
   if (chatId.toString() !== ADMIN_USER_ID) {
     bot.sendMessage(chatId, 'Only admin can remove forwarding URLs.');
     return;
   }
-  
-  if (forwardUrls.delete(url)) {
-    bot.sendMessage(chatId, `URL removed from forwarding list:\n${url}`);
-  } else {
-    bot.sendMessage(chatId, `URL not found in forwarding list:\n${url}`);
-  }
+
+  forwardUrlsCollection.deleteOne({ url: url }).then(result => {
+    if (result.deletedCount > 0) {
+      bot.sendMessage(chatId, `URL removed from forwarding list:\n${url}`);
+    } else {
+      bot.sendMessage(chatId, `URL not found in forwarding list:\n${url}`);
+    }
+  }).catch(err => {
+    console.error('Error removing forward URL:', err);
+    bot.sendMessage(chatId, 'Error removing URL from forwarding list.');
+  });
 });
 
 bot.onText(/\/list-forward/, (msg) => {
   const chatId = msg.chat.id;
-  
+
   if (chatId.toString() !== ADMIN_USER_ID) {
     bot.sendMessage(chatId, 'Only admin can view forwarding list.');
     return;
   }
-  
-  if (forwardUrls.size === 0) {
-    bot.sendMessage(chatId, 'No forwarding URLs configured.');
-    return;
-  }
-  
-  let message = '📤 Forwarding URLs:\n\n';
-  let index = 1;
-  for (const url of forwardUrls) {
-    message += `${index}. ${url}\n`;
-    index++;
-  }
-  
-  bot.sendMessage(chatId, message);
+
+  forwardUrlsCollection.find({}).toArray().then(urls => {
+    if (urls.length === 0) {
+      bot.sendMessage(chatId, 'No forwarding URLs configured.');
+      return;
+    }
+
+    let message = '📤 Forwarding URLs:\n\n';
+    let index = 1;
+    for (const urlDoc of urls) {
+      message += `${index}. ${urlDoc.url}\n`;
+      index++;
+    }
+
+    bot.sendMessage(chatId, message);
+  }).catch(err => {
+    console.error('Error fetching forward URLs:', err);
+    bot.sendMessage(chatId, 'Error fetching forwarding list.');
+  });
 });
 
 bot.onText(/\/forward-menu/, (msg) => {
   const chatId = msg.chat.id;
-  
+
   if (chatId.toString() !== ADMIN_USER_ID) {
     bot.sendMessage(chatId, 'Only admin can access forward menu.');
     return;
   }
-  
-  let forwardList = '';
-  if (forwardUrls.size === 0) {
-    forwardList = 'No forwarding URLs configured.';
-  } else {
-    forwardList = 'Configured forwarding URLs:\n\n';
-    let index = 1;
-    for (const url of forwardUrls) {
-      forwardList += `${index}. ${url}\n`;
-      index++;
+
+  forwardUrlsCollection.find({}).toArray().then(urls => {
+    let forwardList = '';
+    if (urls.length === 0) {
+      forwardList = 'No forwarding URLs configured.';
+    } else {
+      forwardList = 'Configured forwarding URLs:\n\n';
+      let index = 1;
+      for (const urlDoc of urls) {
+        forwardList += `${index}. ${urlDoc.url}\n`;
+        index++;
+      }
     }
-  }
-  
-  const keyboard = {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: '➕ Add Forward URL', callback_data: 'forward_add' },
-          { text: '➖ Remove Forward URL', callback_data: 'forward_remove' }
-        ],
-        [
-          { text: '📋 List Forward URLs', callback_data: 'forward_list' },
-          { text: '🗑️ Clear All', callback_data: 'forward_clear' }
-        ],
-        [
-          { text: '🔄 Refresh', callback_data: 'forward_menu' }
+
+    const keyboard = {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '➕ Add Forward URL', callback_data: 'forward_add' },
+            { text: '➖ Remove Forward URL', callback_data: 'forward_remove' }
+          ],
+          [
+            { text: '📋 List Forward URLs', callback_data: 'forward_list' },
+            { text: '🗑️ Clear All', callback_data: 'forward_clear' }
+          ],
+          [
+            { text: '🔄 Refresh', callback_data: 'forward_menu' }
+          ]
         ]
-      ]
-    }
-  };
-  
-  bot.sendMessage(chatId, `📤 IPN Forward Management\n\n${forwardList}\nSelect an option:`, keyboard);
+      }
+    };
+
+    bot.sendMessage(chatId, `📤 IPN Forward Management\n\n${forwardList}\nSelect an option:`, keyboard);
+  }).catch(err => {
+    console.error('Error fetching forward URLs:', err);
+    bot.sendMessage(chatId, 'Error fetching forward menu.');
+  });
 });
 
 bot.on('callback_query', async (query) => {
@@ -780,153 +802,6 @@ bot.on('callback_query', async (query) => {
     return;
   }
   
-  if (data === 'menu_notifications') {
-    bot.answerCallbackQuery(query.id);
-    
-    if (chatId.toString() !== ADMIN_USER_ID) {
-      bot.sendMessage(chatId, 'Only admin can view notification list.');
-      return;
-    }
-    
-    if (notificationUsers.size === 0) {
-      bot.sendMessage(chatId, 'No users in notification list.');
-      return;
-    }
-    
-    let message = '📋 Notification List:\n\n';
-    notificationUsers.forEach(userId => {
-      message += `- ${userId}\n`;
-    });
-    
-    bot.sendMessage(chatId, message);
-    return;
-  }
-  
-  if (data === 'forward_add') {
-    bot.answerCallbackQuery(query.id);
-    
-    if (chatId.toString() !== ADMIN_USER_ID) {
-      bot.sendMessage(chatId, 'Only admin can add forwarding URLs.');
-      return;
-    }
-    
-    if (!balances[chatId]) {
-      balances[chatId] = {};
-    }
-    balances[chatId].awaitingForwardUrl = true;
-    bot.sendMessage(chatId, 'Please enter the URL to forward IPN to:\n(e.g., https://example.com/ipn)');
-    return;
-  }
-  
-  if (data === 'forward_remove') {
-    bot.answerCallbackQuery(query.id);
-    
-    if (chatId.toString() !== ADMIN_USER_ID) {
-      bot.sendMessage(chatId, 'Only admin can remove forwarding URLs.');
-      return;
-    }
-    
-    if (forwardUrls.size === 0) {
-      bot.sendMessage(chatId, 'No forwarding URLs configured.');
-      return;
-    }
-    
-    if (!balances[chatId]) {
-      balances[chatId] = {};
-    }
-    balances[chatId].awaitingForwardUrlRemove = true;
-    
-    let message = 'Select a URL to remove:\n\n';
-    let index = 1;
-    for (const url of forwardUrls) {
-      message += `${index}. ${url}\n`;
-      index++;
-    }
-    
-    bot.sendMessage(chatId, message + '\nEnter the number or full URL:');
-    return;
-  }
-  
-  if (data === 'forward_list') {
-    bot.answerCallbackQuery(query.id);
-    
-    if (chatId.toString() !== ADMIN_USER_ID) {
-      bot.sendMessage(chatId, 'Only admin can view forwarding list.');
-      return;
-    }
-    
-    if (forwardUrls.size === 0) {
-      bot.sendMessage(chatId, 'No forwarding URLs configured.');
-      return;
-    }
-    
-    let message = '📤 Forwarding URLs:\n\n';
-    let index = 1;
-    for (const url of forwardUrls) {
-      message += `${index}. ${url}\n`;
-      index++;
-    }
-    
-    bot.sendMessage(chatId, message);
-    return;
-  }
-  
-  if (data === 'forward_clear') {
-    bot.answerCallbackQuery(query.id);
-    
-    if (chatId.toString() !== ADMIN_USER_ID) {
-      bot.sendMessage(chatId, 'Only admin can clear forwarding URLs.');
-      return;
-    }
-    
-    const count = forwardUrls.size;
-    forwardUrls.clear();
-    bot.sendMessage(chatId, `Cleared ${count} forwarding URL(s).`);
-    return;
-  }
-  
-  if (data === 'forward_menu') {
-    bot.answerCallbackQuery(query.id);
-    
-    if (chatId.toString() !== ADMIN_USER_ID) {
-      bot.sendMessage(chatId, 'Only admin can access forward menu.');
-      return;
-    }
-    
-    let forwardList = '';
-    if (forwardUrls.size === 0) {
-      forwardList = 'No forwarding URLs configured.';
-    } else {
-      forwardList = 'Configured forwarding URLs:\n\n';
-      let index = 1;
-      for (const url of forwardUrls) {
-        forwardList += `${index}. ${url}\n`;
-        index++;
-      }
-    }
-    
-    const keyboard = {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '➕ Add Forward URL', callback_data: 'forward_add' },
-            { text: '➖ Remove Forward URL', callback_data: 'forward_remove' }
-          ],
-          [
-            { text: '📋 List Forward URLs', callback_data: 'forward_list' },
-            { text: '🗑️ Clear All', callback_data: 'forward_clear' }
-          ],
-          [
-            { text: '🔄 Refresh', callback_data: 'forward_menu' }
-          ]
-        ]
-      }
-    };
-    
-    bot.sendMessage(chatId, `📤 IPN Forward Management\n\n${forwardList}\nSelect an option:`, keyboard);
-    return;
-  }
-  
   if (data.startsWith('cashout_')) {
     const parts = data.split('_');
     const action = parts[1];
@@ -990,33 +865,39 @@ bot.on('callback_query', async (query) => {
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
-  
-  if (text && !text.startsWith('/') && balances[chatId] && balances[chatId].awaitingForwardUrl) {
+
+  if (!text || text.startsWith('/')) {
+    return;
+  }
+
+  const balance = await balancesCollection.findOne({ _id: chatId.toString() });
+  if (!balance) {
+    return;
+  }
+
+  if (balance.awaitingForwardUrl) {
     const url = text.trim();
-    
+
     try {
       new URL(url);
     } catch (error) {
       bot.sendMessage(chatId, 'Invalid URL. Please provide a valid URL including http:// or https://');
       return;
     }
-    
+
     await forwardUrlsCollection.insertOne({ url: url });
-    const balance = await balancesCollection.findOne({ _id: chatId.toString() });
-    if (balance) {
-      await balancesCollection.updateOne({ _id: chatId.toString() }, { $unset: { awaitingForwardUrl: "" } });
-    }
-    
+    await balancesCollection.updateOne({ _id: chatId.toString() }, { $unset: { awaitingForwardUrl: "" } });
+
     const count = await forwardUrlsCollection.countDocuments({});
     bot.sendMessage(chatId, `✅ URL added to forwarding list:\n${url}\n\nTotal forwarding URLs: ${count}`);
     return;
   }
-  
-  if (text && !text.startsWith('/') && balances[chatId] && balances[chatId].awaitingForwardUrlRemove) {
+
+  if (balance.awaitingForwardUrlRemove) {
     const input = text.trim();
     const urls = await forwardUrlsCollection.find({}).toArray();
     let removed = false;
-    
+
     const index = parseInt(input) - 1;
     if (!isNaN(index) && index >= 0 && index < urls.length) {
       await forwardUrlsCollection.deleteOne({ _id: urls[index]._id });
@@ -1028,12 +909,9 @@ bot.on('message', async (msg) => {
         removed = true;
       }
     }
-    
-    const balance = await balancesCollection.findOne({ _id: chatId.toString() });
-    if (balance) {
-      await balancesCollection.updateOne({ _id: chatId.toString() }, { $unset: { awaitingForwardUrlRemove: "" } });
-    }
-    
+
+    await balancesCollection.updateOne({ _id: chatId.toString() }, { $unset: { awaitingForwardUrlRemove: "" } });
+
     if (removed) {
       const count = await forwardUrlsCollection.countDocuments({});
       bot.sendMessage(chatId, `✅ URL removed from forwarding list.\n\nRemaining forwarding URLs: ${count}`);
@@ -1042,31 +920,31 @@ bot.on('message', async (msg) => {
     }
     return;
   }
-  
-  if (text && !text.startsWith('/') && balances[chatId] && balances[chatId].awaitingCashOut) {
+
+  if (balance.awaitingCashOut) {
     const amount = parseFloat(text);
-    
+
     if (isNaN(amount) || amount <= 0) {
       bot.sendMessage(chatId, 'Invalid amount. Please enter a positive number.');
       return;
     }
-    
+
     const transactions = await transactionsCollection.find({}).toArray();
-    const balances = await balancesCollection.find({}).toArray();
+    const allBalances = await balancesCollection.find({}).toArray();
     const totalUSD = transactions.reduce((sum, t) => sum + t.amountUSD, 0);
-    const totalCashedOut = balances.reduce((sum, b) => sum + (b.cashedOut || 0), 0);
+    const totalCashedOut = allBalances.reduce((sum, b) => sum + (b.cashedOut || 0), 0);
     const remaining = totalUSD - totalCashedOut;
-    
+
     if (amount > remaining) {
       bot.sendMessage(chatId, `Insufficient balance. Available: $${remaining.toFixed(2)} USD`);
       return;
     }
-    
+
     const fee = amount * (cashOutFee / 100);
     const netAmount = amount - fee;
-    
+
     await balancesCollection.updateOne({ _id: chatId.toString() }, { $inc: { cashedOut: amount }, $unset: { awaitingCashOut: "" } });
-    
+
     const resultMessage = `💸 Cash Out Successful\n\nAmount: $${amount.toFixed(2)} USD\nFee (${cashOutFee}%): $${fee.toFixed(2)} USD\nNet: $${netAmount.toFixed(2)} USD\n\nRemaining Balance: $${(remaining - amount).toFixed(2)} USD`;
     bot.sendMessage(chatId, resultMessage);
   }
